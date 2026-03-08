@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Greetings",
+    "order": 0,
+    "words": [
+      {"native": "hello", "target": "hallo"},
+      {"native": "goodbye", "target": "auf wiedersehen"},
+      {"native": "good morning", "target": "guten morgen"},
+      {"native": "good night", "target": "gute nacht"},
+      {"native": "please", "target": "bitte"},
+      {"native": "thank you", "target": "danke"}
+    ]
+  },
+  {
+    "name": "Numbers",
+    "order": 1,
+    "words": [
+      {"native": "one", "target": "eins"},
+      {"native": "two", "target": "zwei"},
+      {"native": "three", "target": "drei"},
+      {"native": "four", "target": "vier"},
+      {"native": "five", "target": "fünf"},
+      {"native": "six", "target": "sechs"},
+      {"native": "seven", "target": "sieben"},
+      {"native": "eight", "target": "acht"},
+      {"native": "nine", "target": "neun"},
+      {"native": "ten", "target": "zehn"}
+    ]
+  },
+  {
+    "name": "Colors",
+    "order": 2,
+    "words": [
+      {"native": "red", "target": "rot"},
+      {"native": "blue", "target": "blau"},
+      {"native": "green", "target": "grün"},
+      {"native": "yellow", "target": "gelb"},
+      {"native": "black", "target": "schwarz"},
+      {"native": "white", "target": "weiß"}
+    ]
+  }
+]
