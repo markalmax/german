@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../models/quiz_question.dart';
 import '../models/unit.dart';
 import '../providers/quiz_provider.dart';
 import '../providers/stats_provider.dart';
-import '../widgets/timer_display.dart';
-import '../widgets/word_display.dart';
+import '../utils/constants.dart';
+import '../widgets/quiz_question_widget.dart';
 
 class QuizScreen extends StatefulWidget {
   final Unit unit;
@@ -18,8 +18,7 @@ class QuizScreen extends StatefulWidget {
 }
 
 class _QuizScreenState extends State<QuizScreen> {
-  final _controller = TextEditingController();
-  final _focusNode = FocusNode();
+  bool _completionHandled = false;
 
   @override
   void initState() {
@@ -29,123 +28,199 @@ class _QuizScreenState extends State<QuizScreen> {
     });
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
+  Future<void> _handleQuit() async {
+    final shouldQuit = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Quit quiz?'),
+        content: const Text(
+          'Your progress in this quiz will be lost.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Quit'),
+          ),
+        ],
+      ),
+    );
 
-  void _submit() {
-    final quiz = context.read<QuizProvider>();
-    final text = _controller.text;
-    if (text.isEmpty) return;
-
-    quiz.submitAnswer(text);
-    _controller.clear();
-
-    // Haptic feedback
-    if (quiz.state.lastCorrect == true) {
-      HapticFeedback.lightImpact();
-    } else if (quiz.state.lastCorrect == false) {
-      HapticFeedback.heavyImpact();
+    if (shouldQuit == true && mounted) {
+      Navigator.of(context).pop();
     }
   }
 
-  void _skip() {
-    context.read<QuizProvider>().skipWord();
-    _controller.clear();
+  void _handleAnswer(
+    QuizProvider quiz,
+    QuizQuestion question,
+    String answer,
+  ) {
+    quiz.submitAnswer(question.id, answer);
+  }
+
+  void _goToNextQuestion(QuizProvider quiz) {
+    quiz.nextQuestion();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<QuizProvider>(
-      builder: (context, quiz, _) {
-        if (!quiz.state.isActive && quiz.state.totalAttempts > 0) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            final session = quiz.finishQuiz();
-            if (session != null && context.mounted) {
-              final stats = context.read<StatsProvider>();
-              final existing = stats.getStatsForUnit(session.unitId);
-              final isNewBest = existing == null ||
-                  session.correctCount > existing.bestScore;
-              stats.saveSession(session);
-              Navigator.of(context).pushReplacementNamed(
-                '/results',
-                arguments: {
-                  'session': session,
-                  'isNewBest': isNewBest,
-                },
-              );
-            }
+    return Consumer2<QuizProvider, StatsProvider>(
+      builder: (context, quiz, stats, _) {
+        final session = quiz.currentSession;
+
+        if (!quiz.isQuizActive &&
+            session != null &&
+            session.isCompleted &&
+            !_completionHandled) {
+          _completionHandled = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            final previous = stats.unitStats[session.unitId];
+            final isNewBest =
+                previous == null || session.score > previous.averageScore;
+            await stats.recordQuizSession(session);
+            if (!mounted) return;
+            Navigator.of(context).pushReplacementNamed(
+              '/results',
+              arguments: {
+                'session': session,
+                'isNewBest': isNewBest,
+              },
+            );
           });
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        final state = quiz.state;
-        final word = state.currentWord;
-        final prompt = word != null
-            ? (state.direction == QuizDirection.nativeToTarget
-                ? word.native
-                : word.target)
-            : '';
-        final hint = word != null
-            ? (state.direction == QuizDirection.nativeToTarget
-                ? 'Translate to German'
-                : 'Translate to English')
-            : '';
+        final question = quiz.getCurrentQuestion();
+        final currentIndex = quiz.getCurrentQuestionIndex();
+        final total = quiz.totalQuestions;
+
+        if (session == null || question == null || total == 0) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final answered = session.answers
+            .any((a) => a.questionId == question.id);
+        final existingAnswerEntry = session.answers.where(
+          (a) => a.questionId == question.id,
+        );
+        final existingAnswer =
+            existingAnswerEntry.isNotEmpty ? existingAnswerEntry.first.userAnswer : null;
+
+        final progress = (currentIndex + 1) / total;
 
         return Scaffold(
           appBar: AppBar(
             title: Text(widget.unit.name),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.skip_next),
-                onPressed: _skip,
-                tooltip: 'Skip',
-              ),
-            ],
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: _handleQuit,
+            ),
           ),
           body: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(16),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  TimerDisplay(remainingSeconds: state.remainingSeconds),
-                  const SizedBox(height: 48),
-                  Expanded(
-                    child: Center(
-                      child: WordDisplay(prompt: prompt, hint: hint),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Question ${currentIndex + 1} of $total',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium,
+                            ),
+                            const SizedBox(height: 4),
+                            LinearProgressIndicator(value: progress),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '${quiz.remainingSeconds}s',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium,
+                          ),
+                          SizedBox(
+                            width: 80,
+                            child: LinearProgressIndicator(
+                              value: quiz.remainingSeconds /
+                                  QUESTION_TIME_LIMIT_SECONDS,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Chip(
+                      label: Text(
+                        question.questionType.name
+                            .replaceAll('translateTo', 'Translate to ')
+                            .replaceAll('multipleChoice', 'Multiple choice')
+                            .replaceAll('trueFalse', 'True / False')
+                            .replaceAll('fillBlank', 'Fill in the blank'),
+                      ),
                     ),
                   ),
-                  if (state.lastCorrect != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Icon(
-                        state.lastCorrect! ? Icons.check_circle : Icons.cancel,
-                        color: state.lastCorrect!
-                            ? Colors.green
-                            : Colors.red,
-                        size: 32,
-                      ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: QuizQuestionWidget(
+                      question: question,
+                      onAnswer: (answer) =>
+                          _handleAnswer(quiz, question, answer),
+                      answered: answered,
+                      userAnswer: existingAnswer,
                     ),
-                  TextField(
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    autofocus: true,
-                    textCapitalization: TextCapitalization.none,
-                    autocorrect: false,
-                    decoration: InputDecoration(
-                      hintText: 'Type your answer...',
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.send),
-                        onPressed: _submit,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      if (!answered)
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () =>
+                                _goToNextQuestion(quiz),
+                            child: const Text('Skip'),
+                          ),
+                        ),
+                      if (!answered) const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: answered
+                              ? () => _goToNextQuestion(quiz)
+                              : () {
+                                  // For free text questions, we rely on
+                                  // the internal TextField submission.
+                                  if (question.options.isEmpty) {
+                                    return;
+                                  }
+                                },
+                          child: Text(
+                            answered ? 'Next' : 'Submit',
+                          ),
+                        ),
                       ),
-                    ),
-                    onSubmitted: (_) => _submit(),
+                    ],
                   ),
                 ],
               ),
@@ -156,3 +231,4 @@ class _QuizScreenState extends State<QuizScreen> {
     );
   }
 }
+
