@@ -1,34 +1,53 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../models/unit.dart';
-import '../providers/vocab_provider.dart';
-import 'add_edit_unit_screen.dart';
-import 'quiz_screen.dart';
+import '../widgets/vocabulary_item_card.dart';
 
-class UnitDetailScreen extends StatelessWidget {
+class UnitDetailScreen extends StatefulWidget {
   final Unit unit;
 
   const UnitDetailScreen({super.key, required this.unit});
 
   @override
+  State<UnitDetailScreen> createState() => _UnitDetailScreenState();
+}
+
+class _UnitDetailScreenState extends State<UnitDetailScreen> {
+  late bool _showExamples;
+
+  @override
+  void initState() {
+    super.initState();
+    _showExamples = true;
+  }
+
+  void _startQuiz() {
+    Navigator.of(context).pushNamed(
+      '/quiz',
+      arguments: widget.unit,
+    );
+  }
+
+  void _editUnit() {
+    Navigator.of(context).pushNamed(
+      '/edit-unit',
+      arguments: widget.unit,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final unit = widget.unit;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(unit.name),
         actions: [
-          if (unit.isCustom) ...[
-            IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: () => _navigateToEdit(context),
-              tooltip: 'Edit',
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete),
-              onPressed: () => _confirmDelete(context),
-              tooltip: 'Delete',
-            ),
-          ],
+          IconButton(
+            icon: const Icon(Icons.edit),
+            tooltip: 'Edit unit',
+            onPressed: _editUnit,
+          ),
         ],
       ),
       body: Column(
@@ -36,37 +55,69 @@ class UnitDetailScreen extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.all(16),
-            child: FilledButton.icon(
-              onPressed: () => _navigateToQuiz(context),
-              icon: const Icon(Icons.play_arrow, size: 24),
-              label: const Text('Start Quiz'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (unit.description.isNotEmpty) ...[
+                  Text(
+                    unit.description,
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Text(
+                  '${unit.vocabularyItems.length} words',
+                  style:
+                      Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
+                          ),
+                ),
+              ],
             ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              '${unit.words.length} words',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+            child: FilledButton.icon(
+              onPressed: _startQuiz,
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('Start Quiz'),
             ),
           ),
           const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  _showExamples
+                      ? 'Hide examples'
+                      : 'Show examples',
+                ),
+                Switch(
+                  value: _showExamples,
+                  onChanged: (v) {
+                    setState(() => _showExamples = v);
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              itemCount: unit.words.length,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
+              itemCount: unit.vocabularyItems.length,
               itemBuilder: (context, index) {
-                final word = unit.words[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    title: Text(word.native),
-                    subtitle: Text(word.target),
-                  ),
+                final item = unit.vocabularyItems[index];
+                return VocabularyItemCard(
+                  item: item,
+                  showExample: _showExamples,
                 );
               },
             ),
@@ -75,55 +126,5 @@ class UnitDetailScreen extends StatelessWidget {
       ),
     );
   }
-
-  void _navigateToQuiz(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => QuizScreen(unit: unit),
-      ),
-    );
-  }
-
-  void _navigateToEdit(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => AddEditUnitScreen(unit: unit),
-      ),
-    ).then((_) {
-      if (context.mounted) {
-        final vocab = context.read<VocabProvider>();
-        vocab.loadUnits();
-      }
-    });
-  }
-
-  void _confirmDelete(BuildContext context) {
-    showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Unit'),
-        content: Text(
-          'Are you sure you want to delete "${unit.name}"? This cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    ).then((confirmed) {
-      if (confirmed == true && context.mounted) {
-        context.read<VocabProvider>().deleteUnit(unit.id);
-        Navigator.of(context).pop();
-      }
-    });
-  }
 }
+

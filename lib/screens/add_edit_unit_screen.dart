@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/unit.dart';
-import '../models/word.dart';
+import '../models/vocabulary_item.dart';
 import '../providers/vocab_provider.dart';
+import '../utils/constants.dart';
+import '../utils/validators.dart';
 
 class AddEditUnitScreen extends StatefulWidget {
   const AddEditUnitScreen({super.key, this.unit});
@@ -18,84 +20,126 @@ class AddEditUnitScreen extends StatefulWidget {
 class _AddEditUnitScreenState extends State<AddEditUnitScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
-  final List<_WordPairController> _wordPairs = [];
+  late TextEditingController _descriptionController;
+  final List<_VocabItemControllers> _items = [];
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.unit?.name ?? '');
-    if (widget.unit != null && widget.unit!.words.isNotEmpty) {
-      for (final w in widget.unit!.words) {
-        _wordPairs.add(_WordPairController(
-          TextEditingController(text: w.native),
-          TextEditingController(text: w.target),
-        ));
+    _nameController =
+        TextEditingController(text: widget.unit?.name ?? '');
+    _descriptionController =
+        TextEditingController(text: widget.unit?.description ?? '');
+
+    if (widget.unit != null &&
+        widget.unit!.vocabularyItems.isNotEmpty) {
+      for (final item in widget.unit!.vocabularyItems) {
+        _items.add(
+          _VocabItemControllers(
+            id: item.id,
+            german: TextEditingController(text: item.germanWord),
+            english:
+                TextEditingController(text: item.englishTranslation),
+            exampleDe:
+                TextEditingController(text: item.exampleSentence),
+            exampleEn:
+                TextEditingController(text: item.exampleTranslation),
+            partOfSpeech:
+                TextEditingController(text: item.partOfSpeech),
+          ),
+        );
       }
     } else {
-      _addWordPair();
+      _addItem();
     }
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    for (final pair in _wordPairs) {
-      pair.native.dispose();
-      pair.target.dispose();
+    _descriptionController.dispose();
+    for (final c in _items) {
+      c.dispose();
     }
     super.dispose();
   }
 
-  void _addWordPair() {
+  void _addItem() {
+    if (_items.length >= MAX_VOCABULARY_PER_UNIT) return;
     setState(() {
-      _wordPairs.add(_WordPairController(
-        TextEditingController(),
-        TextEditingController(),
-      ));
+      _items.add(
+        _VocabItemControllers(
+          id: '',
+          german: TextEditingController(),
+          english: TextEditingController(),
+          exampleDe: TextEditingController(),
+          exampleEn: TextEditingController(),
+          partOfSpeech: TextEditingController(),
+        ),
+      );
     });
   }
 
-  void _removeWordPair(int index) {
-    if (_wordPairs.length <= 1) return;
+  void _removeItem(int index) {
     setState(() {
-      _wordPairs[index].native.dispose();
-      _wordPairs[index].target.dispose();
-      _wordPairs.removeAt(index);
+      _items[index].dispose();
+      _items.removeAt(index);
     });
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final words = <Word>[];
-    for (final pair in _wordPairs) {
-      final n = pair.native.text.trim();
-      final t = pair.target.text.trim();
-      if (n.isNotEmpty && t.isNotEmpty) {
-        words.add(Word(native: n, target: t));
-      }
+    final vocabProvider = context.read<VocabProvider>();
+
+    final items = <VocabularyItem>[];
+    for (final c in _items) {
+      final german = c.german.text.trim();
+      final english = c.english.text.trim();
+      if (german.isEmpty || english.isEmpty) continue;
+      items.add(
+        VocabularyItem(
+          id: c.id.isNotEmpty
+              ? c.id
+              : DateTime.now()
+                  .microsecondsSinceEpoch
+                  .toString(),
+          germanWord: german,
+          englishTranslation: english,
+          exampleSentence: c.exampleDe.text.trim(),
+          exampleTranslation: c.exampleEn.text.trim(),
+          partOfSpeech: c.partOfSpeech.text.trim(),
+        ),
+      );
     }
 
-    if (words.isEmpty) {
+    if (items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add at least one word pair')),
+        const SnackBar(
+          content:
+              Text('Add at least one vocabulary item.'),
+        ),
       );
       return;
     }
 
-    final vocab = context.read<VocabProvider>();
+    final now = DateTime.now();
+    final existing = widget.unit;
     final unit = Unit(
-      id: widget.unit?.id ?? '',
+      id: existing?.id ??
+          now.microsecondsSinceEpoch.toString(),
       name: _nameController.text.trim(),
-      order: widget.unit?.order ?? 0,
-      words: words,
-      isCustom: true,
+      description: _descriptionController.text.trim(),
+      vocabularyItems: items,
+      createdAt: existing?.createdAt ?? now,
+      isCompleted: existing?.isCompleted ?? false,
+      competencyLevel: existing?.competencyLevel ?? 0.0,
     );
 
-    if (widget.unit != null && widget.unit!.id.isNotEmpty) {
-      await vocab.updateUnit(unit);
+    if (existing != null) {
+      await vocabProvider.updateUnit(unit);
     } else {
-      await vocab.addUnit(unit);
+      await vocabProvider.addUnit(unit);
     }
 
     if (mounted) Navigator.of(context).pop();
@@ -127,34 +171,48 @@ class _AddEditUnitScreenState extends State<AddEditUnitScreen> {
                 border: OutlineInputBorder(),
               ),
               textCapitalization: TextCapitalization.words,
-              inputFormatters: [LengthLimitingTextInputFormatter(50)],
+              inputFormatters: [
+                LengthLimitingTextInputFormatter(80),
+              ],
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Enter a name';
+                if (v == null || v.trim().isEmpty) {
+                  return 'Enter a name';
+                }
                 return null;
               },
             ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _descriptionController,
+              decoration: const InputDecoration(
+                labelText: 'Description (optional)',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 2,
+            ),
             const SizedBox(height: 24),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisAlignment:
+                  MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Words',
-                  style: Theme.of(context).textTheme.titleMedium,
+                  'Vocabulary items',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium,
                 ),
                 TextButton.icon(
-                  onPressed: _addWordPair,
+                  onPressed: _addItem,
                   icon: const Icon(Icons.add),
                   label: const Text('Add'),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            ...List.generate(_wordPairs.length, (i) {
-              return _WordPairRow(
-                nativeController: _wordPairs[i].native,
-                targetController: _wordPairs[i].target,
-                onRemove: () => _removeWordPair(i),
-                canRemove: _wordPairs.length > 1,
+            ...List.generate(_items.length, (index) {
+              return _VocabularyItemForm(
+                controllers: _items[index],
+                onRemove: () => _removeItem(index),
               );
             }),
           ],
@@ -164,69 +222,123 @@ class _AddEditUnitScreenState extends State<AddEditUnitScreen> {
   }
 }
 
-class _WordPairController {
-  final TextEditingController native;
-  final TextEditingController target;
-  _WordPairController(this.native, this.target);
-}
-
-class _WordPairRow extends StatelessWidget {
-  const _WordPairRow({
-    required this.nativeController,
-    required this.targetController,
-    required this.onRemove,
-    required this.canRemove,
+class _VocabItemControllers {
+  _VocabItemControllers({
+    required this.id,
+    required this.german,
+    required this.english,
+    required this.exampleDe,
+    required this.exampleEn,
+    required this.partOfSpeech,
   });
 
-  final TextEditingController nativeController;
-  final TextEditingController targetController;
+  final String id;
+  final TextEditingController german;
+  final TextEditingController english;
+  final TextEditingController exampleDe;
+  final TextEditingController exampleEn;
+  final TextEditingController partOfSpeech;
+
+  void dispose() {
+    german.dispose();
+    english.dispose();
+    exampleDe.dispose();
+    exampleEn.dispose();
+    partOfSpeech.dispose();
+  }
+}
+
+class _VocabularyItemForm extends StatelessWidget {
+  const _VocabularyItemForm({
+    required this.controllers,
+    required this.onRemove,
+  });
+
+  final _VocabItemControllers controllers;
   final VoidCallback onRemove;
-  final bool canRemove;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: TextFormField(
-              controller: nativeController,
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: controllers.german,
+                    decoration: const InputDecoration(
+                      labelText: 'German',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Required';
+                      }
+                      if (!isValidGermanWord(v)) {
+                        return 'Invalid German word';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextFormField(
+                    controller: controllers.english,
+                    decoration: const InputDecoration(
+                      labelText: 'English',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Required';
+                      }
+                      if (!isValidEnglishTranslation(v)) {
+                        return 'Invalid English';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+                IconButton(
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.delete),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: controllers.partOfSpeech,
               decoration: const InputDecoration(
-                labelText: 'Native',
+                labelText: 'Part of speech (e.g. noun, verb)',
                 border: OutlineInputBorder(),
-                isDense: true,
               ),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Required';
-                return null;
-              },
             ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextFormField(
-              controller: targetController,
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: controllers.exampleDe,
               decoration: const InputDecoration(
-                labelText: 'Target',
+                labelText: 'Example sentence (German)',
                 border: OutlineInputBorder(),
-                isDense: true,
               ),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Required';
-                return null;
-              },
             ),
-          ),
-          if (canRemove)
-            IconButton(
-              onPressed: onRemove,
-              icon: const Icon(Icons.remove_circle_outline),
-              color: Theme.of(context).colorScheme.error,
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: controllers.exampleEn,
+              decoration: const InputDecoration(
+                labelText: 'Example translation (English)',
+                border: OutlineInputBorder(),
+              ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
+

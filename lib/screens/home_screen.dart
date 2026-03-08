@@ -2,147 +2,168 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/unit.dart';
+import '../providers/stats_provider.dart';
 import '../providers/vocab_provider.dart';
+import '../widgets/empty_state_widget.dart';
 import '../widgets/unit_card.dart';
-import 'add_edit_unit_screen.dart';
-import 'quiz_screen.dart';
-import 'stats_screen.dart';
-import 'unit_detail_screen.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
+  void _openStats(BuildContext context) {
+    Navigator.of(context).pushNamed('/stats');
+  }
 
-class _HomeScreenState extends State<HomeScreen> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadData();
+  void _openAddUnit(BuildContext context) {
+    Navigator.of(context).pushNamed('/add-unit');
+  }
+
+  void _openUnitDetail(BuildContext context, Unit unit) {
+    Navigator.of(context).pushNamed('/unit', arguments: unit);
+  }
+
+  void _editUnit(BuildContext context, Unit unit) {
+    Navigator.of(context).pushNamed('/edit-unit', arguments: unit);
+  }
+
+  void _confirmDelete(BuildContext context, Unit unit) {
+    showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete unit'),
+        content: Text(
+          'Are you sure you want to delete "${unit.name}"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed == true) {
+        context.read<VocabProvider>().deleteUnit(unit.id);
+      }
     });
-  }
-
-  Future<void> _loadData() async {
-    final vocab = context.read<VocabProvider>();
-    if (!vocab.isLoaded) {
-      await vocab.loadUnits();
-    }
-  }
-
-  void _navigateToQuiz(Unit unit) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => QuizScreen(unit: unit),
-      ),
-    );
-  }
-
-  void _navigateToUnitDetail(Unit unit) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => UnitDetailScreen(unit: unit),
-      ),
-    );
-  }
-
-  void _navigateToAddUnit() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const AddEditUnitScreen(),
-      ),
-    ).then((_) => _loadData());
-  }
-
-  void _navigateToStats() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const StatsScreen(),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Vocabulary Quiz'),
+        title: const Text('German Vocabulary Quiz'),
         actions: [
           IconButton(
+            onPressed: () => _openStats(context),
             icon: const Icon(Icons.bar_chart),
-            onPressed: _navigateToStats,
-            tooltip: 'Stats',
+            tooltip: 'Statistics',
           ),
         ],
       ),
-      body: Consumer<VocabProvider>(
-        builder: (context, vocab, _) {
-          if (!vocab.isLoaded) {
+      body: Consumer2<VocabProvider, StatsProvider>(
+        builder: (context, vocab, stats, _) {
+          if (vocab.isLoading) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (vocab.units.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.menu_book_outlined,
-                      size: 80,
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'No units yet',
-                      style: Theme.of(context).textTheme.titleLarge,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Add your first unit to start learning!',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    FilledButton.icon(
-                      onPressed: _navigateToAddUnit,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Add Unit'),
-                    ),
-                  ],
-                ),
-              ),
+          final units = vocab.getAllUnits();
+          if (units.isEmpty) {
+            return EmptyStateWidget(
+              title: 'No units yet',
+              message:
+                  'Create your first unit to start learning German vocabulary.',
+              action: () => _openAddUnit(context),
+              actionLabel: 'Add Unit',
             );
           }
 
           return RefreshIndicator(
-            onRefresh: _loadData,
+            onRefresh: () async {
+              await vocab.init();
+              await context.read<StatsProvider>().init();
+            },
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: vocab.units.length,
+              itemCount: units.length,
               itemBuilder: (context, index) {
-                final unit = vocab.units[index];
-                return UnitCard(
-                  unit: unit,
-                  onStartQuiz: () => _navigateToQuiz(unit),
-                  onTap: () => _navigateToUnitDetail(unit),
+                final unit = units[index];
+                return GestureDetector(
+                  onLongPress: () =>
+                      _showUnitActionsSheet(context, unit),
+                  child: UnitCard(
+                    unit: unit,
+                    onTap: () => _openUnitDetail(context, unit),
+                    onEdit: () => _editUnit(context, unit),
+                    onDelete: () => _confirmDelete(context, unit),
+                  ),
                 );
               },
             ),
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _navigateToAddUnit,
-        tooltip: 'Add Unit',
-        child: const Icon(Icons.add),
+      floatingActionButtonLocation:
+          FloatingActionButtonLocation.endFloat,
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'statsFab',
+            onPressed: () => _openStats(context),
+            child: const Icon(Icons.bar_chart),
+          ),
+          const SizedBox(height: 8),
+          FloatingActionButton(
+            heroTag: 'addUnitFab',
+            onPressed: () => _openAddUnit(context),
+            child: const Icon(Icons.add),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showUnitActionsSheet(BuildContext context, Unit unit) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.visibility),
+              title: const Text('View unit'),
+              onTap: () {
+                Navigator.of(context).pop();
+                _openUnitDetail(context, unit);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('Edit unit'),
+              onTap: () {
+                Navigator.of(context).pop();
+                _editUnit(context, unit);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete),
+              title: const Text('Delete unit'),
+              onTap: () {
+                Navigator.of(context).pop();
+                _confirmDelete(context, unit);
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
 }
+
