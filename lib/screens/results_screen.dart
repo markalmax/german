@@ -32,8 +32,11 @@ class ResultsScreen extends StatelessWidget {
     }
     for (final answer in session.answers) {
       if (!answer.isCorrect) continue;
-      final question = session.questions
-          .firstWhere((q) => q.id == answer.questionId);
+      final matching = session.questions
+          .where((q) => q.id == answer.questionId)
+          .toList();
+      if (matching.isEmpty) continue;
+      final question = matching.first;
       byType[question.questionType] =
           (byType[question.questionType] ?? 0) + 1;
     }

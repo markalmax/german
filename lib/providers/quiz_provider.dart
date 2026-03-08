@@ -308,7 +308,7 @@ class QuizProvider extends ChangeNotifier {
 
     _currentQuestionIndex += 1;
     _questionStartTime = DateTime.now();
-    _remainingSeconds = QUESTION_TIME_LIMIT_SECONDS;
+    _startTimer();
     notifyListeners();
   }
 

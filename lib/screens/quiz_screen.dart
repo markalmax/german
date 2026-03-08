@@ -18,6 +18,8 @@ class QuizScreen extends StatefulWidget {
 }
 
 class _QuizScreenState extends State<QuizScreen> {
+  bool _completionHandled = false;
+
   @override
   void initState() {
     super.initState();
@@ -70,7 +72,11 @@ class _QuizScreenState extends State<QuizScreen> {
       builder: (context, quiz, stats, _) {
         final session = quiz.currentSession;
 
-        if (!quiz.isQuizActive && session != null && session.isCompleted) {
+        if (!quiz.isQuizActive &&
+            session != null &&
+            session.isCompleted &&
+            !_completionHandled) {
+          _completionHandled = true;
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             final previous = stats.unitStats[session.unitId];
             final isNewBest =

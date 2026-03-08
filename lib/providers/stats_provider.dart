@@ -81,7 +81,9 @@ class StatsProvider extends ChangeNotifier {
       quizzesCompleted: quizzesCompleted,
       averageScore: newAverage,
       lastAttemptDate: session.endTime ?? session.startTime,
-      competencyLevel: existing?.competencyLevel ?? session.score,
+      // Use the updated average score as the current competency level
+      // so that it evolves over time with repeated practice.
+      competencyLevel: newAverage,
     );
 
     _unitStats[session.unitId] = updatedUnitStats;

@@ -125,25 +125,85 @@ class QuizQuestionWidget extends StatelessWidget {
   }
 
   Widget _buildFreeText(BuildContext context) {
-    final controller = TextEditingController(text: userAnswer ?? '');
     final isToEnglish =
         question.questionType == QuizQuestionType.translateToEnglish;
     final prompt = isToEnglish
         ? 'Translate to English'
         : 'Translate to German';
 
+    return _FreeTextQuestionField(
+      title: prompt,
+      promptText:
+          isToEnglish ? question.germanWord : question.englishTranslation,
+      answered: answered,
+      initialAnswer: userAnswer,
+      onAnswer: onAnswer,
+      buildPrompt: (title, subtitle) =>
+          _buildPrompt(context, title, subtitle),
+    );
+  }
+}
+
+class _FreeTextQuestionField extends StatefulWidget {
+  const _FreeTextQuestionField({
+    required this.title,
+    required this.promptText,
+    required this.answered,
+    required this.initialAnswer,
+    required this.onAnswer,
+    required this.buildPrompt,
+  });
+
+  final String title;
+  final String promptText;
+  final bool answered;
+  final String? initialAnswer;
+  final Function(String) onAnswer;
+  final Widget Function(String title, String subtitle) buildPrompt;
+
+  @override
+  State<_FreeTextQuestionField> createState() =>
+      _FreeTextQuestionFieldState();
+}
+
+class _FreeTextQuestionFieldState extends State<_FreeTextQuestionField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller =
+        TextEditingController(text: widget.initialAnswer ?? '');
+  }
+
+  @override
+  void didUpdateWidget(covariant _FreeTextQuestionField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialAnswer != widget.initialAnswer &&
+        widget.initialAnswer != _controller.text) {
+      _controller.text = widget.initialAnswer ?? '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildPrompt(context, prompt,
-            isToEnglish ? question.germanWord : question.englishTranslation),
+        widget.buildPrompt(widget.title, widget.promptText),
         const SizedBox(height: 16),
         TextField(
-          controller: controller,
-          enabled: !answered,
+          controller: _controller,
+          enabled: !widget.answered,
           autofocus: true,
           textInputAction: TextInputAction.done,
-          onSubmitted: answered ? null : onAnswer,
+          onSubmitted: widget.answered ? null : widget.onAnswer,
           decoration: const InputDecoration(
             border: OutlineInputBorder(),
             hintText: 'Type your answer...',
@@ -153,4 +213,5 @@ class QuizQuestionWidget extends StatelessWidget {
     );
   }
 }
+
 
