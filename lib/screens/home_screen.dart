@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/unit.dart';
@@ -6,6 +7,7 @@ import '../providers/vocab_provider.dart';
 import '../widgets/unit_card.dart';
 import 'add_edit_unit_screen.dart';
 import 'quiz_screen.dart';
+import 'settings_screen.dart';
 import 'stats_screen.dart';
 import 'unit_detail_screen.dart';
 
@@ -17,12 +19,21 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  late TextEditingController _searchController;
+
   @override
   void initState() {
     super.initState();
+    _searchController = TextEditingController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -64,12 +75,25 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _navigateToSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const SettingsScreen(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Vocabulary Quiz'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: _navigateToSettings,
+            tooltip: 'Settings',
+          ),
           IconButton(
             icon: const Icon(Icons.bar_chart),
             onPressed: _navigateToStats,
@@ -82,6 +106,14 @@ class _HomeScreenState extends State<HomeScreen> {
           if (!vocab.isLoaded) {
             return const Center(child: CircularProgressIndicator());
           }
+
+          final filteredUnits = _searchController.text.isEmpty
+              ? vocab.units
+              : vocab.units
+                  .where((unit) => unit.name
+                      .toLowerCase()
+                      .contains(_searchController.text.toLowerCase()))
+                  .toList();
 
           if (vocab.units.isEmpty) {
             return Center(
@@ -123,17 +155,56 @@ class _HomeScreenState extends State<HomeScreen> {
 
           return RefreshIndicator(
             onRefresh: _loadData,
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: vocab.units.length,
-              itemBuilder: (context, index) {
-                final unit = vocab.units[index];
-                return UnitCard(
-                  unit: unit,
-                  onStartQuiz: () => _navigateToQuiz(unit),
-                  onTap: () => _navigateToUnitDetail(unit),
-                );
-              },
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search units...',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {});
+                              },
+                            )
+                          : null,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onChanged: (value) => setState(() {}),
+                  ),
+                ),
+                Expanded(
+                  child: filteredUnits.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No units found',
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                  color: Theme.of(context).colorScheme.outline,
+                                ),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          itemCount: filteredUnits.length,
+                          itemBuilder: (context, index) {
+                            final unit = filteredUnits[index];
+                            return UnitCard(
+                              unit: unit,
+                              onStartQuiz: () => _navigateToQuiz(unit),
+                              onTap: () => _navigateToUnitDetail(unit),
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
           );
         },

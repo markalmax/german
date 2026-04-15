@@ -51,4 +51,20 @@ class VocabProvider extends ChangeNotifier {
       return null;
     }
   }
+
+  Future<String> exportUnits({bool onlyCustom = true}) async {
+    return await _repo.exportUnits(onlyCustom: onlyCustom);
+  }
+
+  Future<String> exportUnit(Unit unit) async {
+    return await _repo.exportUnit(unit);
+  }
+
+  Future<bool> importUnits(String jsonString) async {
+    final success = await _repo.importUnits(jsonString);
+    if (success) {
+      await loadUnits();
+    }
+    return success;
+  }
 }

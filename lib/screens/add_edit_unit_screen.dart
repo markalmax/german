@@ -18,12 +18,16 @@ class AddEditUnitScreen extends StatefulWidget {
 class _AddEditUnitScreenState extends State<AddEditUnitScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
+  late TextEditingController _timeLimitController;
   final List<_WordPairController> _wordPairs = [];
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.unit?.name ?? '');
+    _timeLimitController = TextEditingController(
+      text: (widget.unit?.timeLimitSeconds ?? 600).toString(),
+    );
     if (widget.unit != null && widget.unit!.words.isNotEmpty) {
       for (final w in widget.unit!.words) {
         _wordPairs.add(_WordPairController(
@@ -39,6 +43,7 @@ class _AddEditUnitScreenState extends State<AddEditUnitScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _timeLimitController.dispose();
     for (final pair in _wordPairs) {
       pair.native.dispose();
       pair.target.dispose();
@@ -83,6 +88,8 @@ class _AddEditUnitScreenState extends State<AddEditUnitScreen> {
       return;
     }
 
+    final timeLimitSeconds = int.tryParse(_timeLimitController.text) ?? 600;
+
     final vocab = context.read<VocabProvider>();
     final unit = Unit(
       id: widget.unit?.id ?? '',
@@ -90,6 +97,7 @@ class _AddEditUnitScreenState extends State<AddEditUnitScreen> {
       order: widget.unit?.order ?? 0,
       words: words,
       isCustom: true,
+      timeLimitSeconds: timeLimitSeconds,
     );
 
     if (widget.unit != null && widget.unit!.id.isNotEmpty) {
@@ -101,6 +109,73 @@ class _AddEditUnitScreenState extends State<AddEditUnitScreen> {
     if (mounted) Navigator.of(context).pop();
   }
 
+  Future<void> _importUnits() async {
+    final textController = TextEditingController();
+
+    if (!context.mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Import Lessons'),
+        content: SingleChildScrollView(
+          child: TextField(
+            controller: textController,
+            minLines: 5,
+            maxLines: 10,
+            decoration: const InputDecoration(
+              hintText: 'Paste JSON data here',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              final jsonData = textController.text.trim();
+
+              if (jsonData.isEmpty) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please paste JSON data')),
+                );
+                return;
+              }
+
+              final vocab = context.read<VocabProvider>();
+              try {
+                final success = await vocab.importUnits(jsonData);
+                if (!context.mounted) return;
+
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Lessons imported successfully')),
+                  );
+                  if (mounted) Navigator.of(context).pop();
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Failed to import lessons')),
+                  );
+                }
+              } catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Import error: $e')),
+                );
+              }
+            },
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.unit != null;
@@ -109,6 +184,12 @@ class _AddEditUnitScreenState extends State<AddEditUnitScreen> {
       appBar: AppBar(
         title: Text(isEditing ? 'Edit Unit' : 'Add Unit'),
         actions: [
+          if (!isEditing)
+            IconButton(
+              icon: const Icon(Icons.upload),
+              tooltip: 'Import lessons',
+              onPressed: _importUnits,
+            ),
           TextButton(
             onPressed: _save,
             child: const Text('Save'),
@@ -130,6 +211,25 @@ class _AddEditUnitScreenState extends State<AddEditUnitScreen> {
               inputFormatters: [LengthLimitingTextInputFormatter(50)],
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Enter a name';
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _timeLimitController,
+              decoration: const InputDecoration(
+                labelText: 'Time limit (seconds)',
+                border: OutlineInputBorder(),
+                helperText: 'e.g., 600 for 10 minutes',
+              ),
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'Enter time limit';
+                final seconds = int.tryParse(v);
+                if (seconds == null || seconds < 30) {
+                  return 'Minimum 30 seconds';
+                }
                 return null;
               },
             ),

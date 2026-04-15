@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/quiz_session.dart';
@@ -13,6 +14,18 @@ class StatsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Statistics'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download),
+            tooltip: 'Export data',
+            onPressed: () => _exportData(context),
+          ),
+          IconButton(
+            icon: const Icon(Icons.upload),
+            tooltip: 'Import data',
+            onPressed: () => _importData(context),
+          ),
+        ],
       ),
       body: FutureBuilder<void>(
         future: _loadData(context),
@@ -98,6 +111,115 @@ class StatsScreen extends StatelessWidget {
       stats.loadSessions(limit: 50),
       if (!vocab.isLoaded) vocab.loadUnits(),
     ]);
+  }
+
+  Future<void> _exportData(BuildContext context) async {
+    final stats = context.read<StatsProvider>();
+    try {
+      final jsonData = await stats.exportData();
+      if (!context.mounted) return;
+      
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Export Data'),
+          content: SingleChildScrollView(
+            child: SelectableText(
+              jsonData,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: jsonData));
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Data copied to clipboard')),
+                );
+                Navigator.of(context).pop();
+              },
+              child: const Text('Copy to Clipboard'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Export failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _importData(BuildContext context) async {
+    final textController = TextEditingController();
+    
+    if (!context.mounted) return;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Import Data'),
+        content: SingleChildScrollView(
+          child: TextField(
+            controller: textController,
+            minLines: 5,
+            maxLines: 10,
+            decoration: const InputDecoration(
+              hintText: 'Paste JSON data here',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              final jsonData = textController.text.trim();
+              
+              if (jsonData.isEmpty) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please paste JSON data')),
+                );
+                return;
+              }
+              
+              final stats = context.read<StatsProvider>();
+              try {
+                final success = await stats.importData(jsonData);
+                if (!context.mounted) return;
+                
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Data imported successfully')),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Failed to import data')),
+                  );
+                }
+              } catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Import error: $e')),
+                );
+              }
+            },
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

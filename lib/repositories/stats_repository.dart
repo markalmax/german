@@ -66,4 +66,54 @@ class StatsRepository {
     }
     return map;
   }
+
+  Future<String> exportData() async {
+    final sessions = await getSessions();
+    final stats = await getAllStats();
+    
+    final exportData = {
+      'exportDate': DateTime.now().toIso8601String(),
+      'sessions': sessions.map((s) => s.toMap()).toList(),
+      'stats': stats.values.map((s) => s.toMap()).toList(),
+    };
+    
+    return json.encode(exportData);
+  }
+
+  Future<bool> importData(String jsonString) async {
+    try {
+      if (_sessionsBox == null || _statsBox == null) return false;
+      
+      final data = json.decode(jsonString) as Map<String, dynamic>;
+      
+      // Import sessions
+      if (data['sessions'] is List) {
+        for (final sessionData in data['sessions'] as List) {
+          final session = QuizSession.fromMap(sessionData as Map<String, dynamic>);
+          final key = '${session.unitId}_${session.timestamp.millisecondsSinceEpoch}';
+          await _sessionsBox!.put(key, json.encode(session.toMap()));
+        }
+      }
+      
+      // Import stats
+      if (data['stats'] is List) {
+        for (final statsData in data['stats'] as List) {
+          final stat = UnitStats.fromMap(statsData as Map<String, dynamic>);
+          await _statsBox!.put(stat.unitId, json.encode(stat.toMap()));
+        }
+      }
+      
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<String> exportSession(QuizSession session) async {
+    final exportData = {
+      'exportDate': DateTime.now().toIso8601String(),
+      'session': session.toMap(),
+    };
+    return json.encode(exportData);
+  }
 }

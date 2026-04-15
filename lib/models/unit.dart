@@ -6,6 +6,7 @@ class Unit {
   final int order;
   final List<Word> words;
   final bool isCustom;
+  final int timeLimitSeconds;
 
   const Unit({
     required this.id,
@@ -13,6 +14,7 @@ class Unit {
     required this.order,
     required this.words,
     this.isCustom = false,
+    this.timeLimitSeconds = 600,
   });
 
   Map<String, dynamic> toMap() {
@@ -22,6 +24,7 @@ class Unit {
       'order': order,
       'words': words.map((w) => w.toMap()).toList(),
       'isCustom': isCustom,
+      'timeLimitSeconds': timeLimitSeconds,
     };
   }
 
@@ -35,6 +38,7 @@ class Unit {
               .toList() ??
           [],
       isCustom: map['isCustom'] as bool? ?? false,
+      timeLimitSeconds: (map['timeLimitSeconds'] as num?)?.toInt() ?? 600,
     );
   }
 
@@ -44,6 +48,7 @@ class Unit {
     int? order,
     List<Word>? words,
     bool? isCustom,
+    int? timeLimitSeconds,
   }) {
     return Unit(
       id: id ?? this.id,
@@ -51,6 +56,7 @@ class Unit {
       order: order ?? this.order,
       words: words ?? this.words,
       isCustom: isCustom ?? this.isCustom,
+      timeLimitSeconds: timeLimitSeconds ?? this.timeLimitSeconds,
     );
   }
 }

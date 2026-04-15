@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/unit.dart';
@@ -18,6 +19,11 @@ class UnitDetailScreen extends StatelessWidget {
         title: Text(unit.name),
         actions: [
           if (unit.isCustom) ...[
+            IconButton(
+              icon: const Icon(Icons.download),
+              onPressed: () => _exportUnit(context),
+              tooltip: 'Export',
+            ),
             IconButton(
               icon: const Icon(Icons.edit),
               onPressed: () => _navigateToEdit(context),
@@ -125,5 +131,48 @@ class UnitDetailScreen extends StatelessWidget {
         Navigator.of(context).pop();
       }
     });
+  }
+
+  Future<void> _exportUnit(BuildContext context) async {
+    final vocab = context.read<VocabProvider>();
+    try {
+      final jsonData = await vocab.exportUnit(unit);
+      if (!context.mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Export Lesson'),
+          content: SingleChildScrollView(
+            child: SelectableText(
+              jsonData,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: jsonData));
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Data copied to clipboard')),
+                );
+                Navigator.of(context).pop();
+              },
+              child: const Text('Copy to Clipboard'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Export failed: $e')),
+      );
+    }
   }
 }

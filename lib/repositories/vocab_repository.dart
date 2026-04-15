@@ -44,19 +44,8 @@ class VocabRepository {
   }
 
   Future<List<Unit>> getAllUnits() async {
-    final predefined = await loadPredefinedUnits();
     final custom = await loadCustomUnits();
-    final maxOrder = predefined.isEmpty ? 0 : predefined.map((u) => u.order).reduce((a, b) => a > b ? a : b);
-    for (var i = 0; i < custom.length; i++) {
-      custom[i] = Unit(
-        id: custom[i].id,
-        name: custom[i].name,
-        order: maxOrder + 1 + i,
-        words: custom[i].words,
-        isCustom: true,
-      );
-    }
-    return [...predefined, ...custom]..sort((a, b) => a.order.compareTo(b.order));
+    return custom..sort((a, b) => a.order.compareTo(b.order));
   }
 
   Future<void> saveCustomUnit(Unit unit) async {
@@ -81,5 +70,41 @@ class VocabRepository {
   Future<void> updateCustomUnit(Unit unit) async {
     if (unit.id.isEmpty) return;
     await saveCustomUnit(unit);
+  }
+
+  Future<String> exportUnits({bool onlyCustom = true}) async {
+    final units = onlyCustom ? await loadCustomUnits() : await getAllUnits();
+    final exportData = {
+      'exportDate': DateTime.now().toIso8601String(),
+      'units': units.map((u) => u.toMap()).toList(),
+    };
+    return json.encode(exportData);
+  }
+
+  Future<String> exportUnit(Unit unit) async {
+    final exportData = {
+      'exportDate': DateTime.now().toIso8601String(),
+      'units': [unit.toMap()],
+    };
+    return json.encode(exportData);
+  }
+
+  Future<bool> importUnits(String jsonString) async {
+    try {
+      if (_unitsBox == null) return false;
+
+      final data = json.decode(jsonString) as Map<String, dynamic>;
+
+      if (data['units'] is List) {
+        for (final unitData in data['units'] as List) {
+          final unit = Unit.fromMap(unitData as Map<String, dynamic>);
+          await saveCustomUnit(unit);
+        }
+      }
+
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 }

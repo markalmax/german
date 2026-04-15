@@ -44,7 +44,9 @@ class StatsProvider extends ChangeNotifier {
       bestTime: existing != null
           ? (session.correctCount > existing.bestScore
               ? session.durationSeconds
-              : existing.bestTime)
+              : (session.correctCount == existing.bestScore && session.durationSeconds < existing.bestTime
+                  ? session.durationSeconds
+                  : existing.bestTime))
           : session.durationSeconds,
       totalSessions: (existing?.totalSessions ?? 0) + 1,
     );
@@ -59,5 +61,22 @@ class StatsProvider extends ChangeNotifier {
 
   List<QuizSession> getSessionsForUnit(String unitId) {
     return _sessions.where((s) => s.unitId == unitId).toList();
+  }
+
+  Future<String> exportData() async {
+    return await _repo.exportData();
+  }
+
+  Future<bool> importData(String jsonString) async {
+    final success = await _repo.importData(jsonString);
+    if (success) {
+      await loadAllStats();
+      await loadSessions(limit: 100);
+    }
+    return success;
+  }
+
+  Future<String> exportSession(QuizSession session) async {
+    return await _repo.exportSession(session);
   }
 }

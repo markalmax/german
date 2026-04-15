@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/quiz_session.dart';
+import '../providers/stats_provider.dart';
 import '../providers/vocab_provider.dart';
 import 'quiz_screen.dart';
 
@@ -17,6 +19,13 @@ class ResultsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Results'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download),
+            tooltip: 'Export result',
+            onPressed: () => _exportSession(context),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Padding(
@@ -98,5 +107,48 @@ class ResultsScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _exportSession(BuildContext context) async {
+    final stats = context.read<StatsProvider>();
+    try {
+      final jsonData = await stats.exportSession(session);
+      if (!context.mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Export Quiz Result'),
+          content: SingleChildScrollView(
+            child: SelectableText(
+              jsonData,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: jsonData));
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Data copied to clipboard')),
+                );
+                Navigator.of(context).pop();
+              },
+              child: const Text('Copy to Clipboard'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Export failed: $e')),
+      );
+    }
   }
 }

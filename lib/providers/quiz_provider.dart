@@ -51,13 +51,12 @@ class QuizState {
 }
 
 class QuizProvider extends ChangeNotifier {
-  static const int quizDurationSeconds = 600; // 10 minutes
-
   QuizState _state = const QuizState();
   Timer? _timer;
   List<Word> _wordPool = [];
   int _wordIndex = 0;
   Unit? _currentUnit;
+  int _quizDurationSeconds = 600;
 
   QuizState get state => _state;
   Unit? get currentUnit => _currentUnit;
@@ -66,15 +65,14 @@ class QuizProvider extends ChangeNotifier {
     if (unit.words.isEmpty) return;
 
     _currentUnit = unit;
+    _quizDurationSeconds = unit.timeLimitSeconds;
     _wordPool = List.from(unit.words)..shuffle();
     _wordIndex = 0;
 
     _state = QuizState(
-      remainingSeconds: quizDurationSeconds,
+      remainingSeconds: _quizDurationSeconds,
       currentWord: _wordPool.isNotEmpty ? _wordPool[0] : null,
-      direction: DateTime.now().millisecond % 2 == 0
-          ? QuizDirection.nativeToTarget
-          : QuizDirection.targetToNative,
+      direction: QuizDirection.nativeToTarget,
       correctCount: 0,
       totalAttempts: 0,
       lastCorrect: null,
@@ -129,13 +127,18 @@ class QuizProvider extends ChangeNotifier {
   void _advanceToNextWord() {
     if (_state.remainingSeconds <= 0) return;
 
-    _wordIndex = (_wordIndex + 1) % _wordPool.length;
+    _wordIndex++;
+    // End quiz if all words have been shown
+    if (_wordIndex >= _wordPool.length) {
+      _timer?.cancel();
+      _state = _state.copyWith(isActive: false);
+      return;
+    }
+    
     final nextWord = _wordPool[_wordIndex];
     _state = _state.copyWith(
       currentWord: nextWord,
-      direction: DateTime.now().millisecond % 2 == 0
-          ? QuizDirection.nativeToTarget
-          : QuizDirection.targetToNative,
+      direction: QuizDirection.nativeToTarget,
       clearLastCorrect: true,
     );
   }
@@ -149,7 +152,7 @@ class QuizProvider extends ChangeNotifier {
       timestamp: DateTime.now(),
       correctCount: _state.correctCount,
       totalAttempts: _state.totalAttempts,
-      durationSeconds: quizDurationSeconds - _state.remainingSeconds,
+      durationSeconds: _quizDurationSeconds - _state.remainingSeconds,
     );
 
     _state = const QuizState();
