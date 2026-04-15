@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/unit.dart';
@@ -83,6 +82,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _navigateToHostLiveGame() {
+    Navigator.of(context).pushNamed('/host-live');
+  }
+
+  void _navigateToJoinLiveGame() {
+    Navigator.of(context).pushNamed('/join-live');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -157,6 +164,28 @@ class _HomeScreenState extends State<HomeScreen> {
             onRefresh: _loadData,
             child: Column(
               children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: _navigateToHostLiveGame,
+                          icon: const Icon(Icons.cast),
+                          label: const Text('Host live'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton.tonalIcon(
+                          onPressed: _navigateToJoinLiveGame,
+                          icon: const Icon(Icons.login),
+                          label: const Text('Join'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 Padding(
                   padding: const EdgeInsets.all(12),
                   child: TextField(

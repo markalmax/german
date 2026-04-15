@@ -9,10 +9,12 @@ import 'providers/theme_provider.dart';
 import 'providers/vocab_provider.dart';
 import 'screens/add_edit_unit_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/host_live_game_screen.dart';
 import 'screens/quiz_screen.dart';
 import 'screens/results_screen.dart';
 import 'screens/stats_screen.dart';
 import 'screens/unit_detail_screen.dart';
+import 'screens/join_live_game_screen.dart';
 
 class VocabApp extends StatelessWidget {
   const VocabApp({super.key});
@@ -47,6 +49,8 @@ class VocabApp extends StatelessWidget {
             routes: {
               '/': (context) => const HomeScreen(),
               '/stats': (context) => const StatsScreen(),
+              '/host-live': (context) => const HostLiveGameScreen(),
+              '/join-live': (context) => const JoinLiveGameScreen(),
             },
             onGenerateRoute: (settings) {
               switch (settings.name) {
